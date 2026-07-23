@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "ESTORE Premium"
+version = "1.0.0"
+id = "artifacts/estore"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21806
+
+[services.development]
+run = "pnpm --filter @workspace/estore run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/estore", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/estore/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21806"
+BASE_PATH = "/"
