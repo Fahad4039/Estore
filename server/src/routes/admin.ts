@@ -1,7 +1,7 @@
-import { Router } from 'express';
+import { Router, type IRouter } from 'express';
 import { query, queryOne, execute } from '../db/postgres';
 
-const router = Router();
+const router: IRouter = Router();
 
 async function getSessionUser(sid: string | undefined): Promise<any | null> {
   if (!sid) return null;

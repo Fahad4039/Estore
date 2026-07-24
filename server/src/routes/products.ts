@@ -1,11 +1,11 @@
-import { Router } from 'express';
+import { Router, type IRouter } from 'express';
 import { query, queryOne, execute } from '../db/postgres';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const router = Router();
+const router: IRouter = Router();
 
 let staticProducts: any[] = [];
 try { staticProducts = JSON.parse(readFileSync(join(__dirname, '../db/products-seed.json'), 'utf8')); } catch {}

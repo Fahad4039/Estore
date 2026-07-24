@@ -3,7 +3,7 @@ import { logger } from '../lib/logger';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { createHash } from 'crypto';
+import bcrypt from 'bcrypt';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -192,7 +192,7 @@ export async function initDB() {
   // Seed admin user
   const adminExists = await queryOne('SELECT id FROM users WHERE email=$1', ['admin@estore.com']);
   if (!adminExists) {
-    const hash = createHash('sha256').update('admin123estore-salt-2025').digest('hex');
+    const hash = await bcrypt.hash('admin123', 12);
     await execute(
       `INSERT INTO users (id,name,email,password_hash,role,referral_code,coins,wallet_balance)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING`,

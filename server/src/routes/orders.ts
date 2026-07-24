@@ -1,8 +1,8 @@
-import { Router } from 'express';
+import { Router, type IRouter } from 'express';
 import { query, queryOne, execute } from '../db/postgres';
 import { randomBytes } from 'crypto';
 
-const router = Router();
+const router: IRouter = Router();
 function makeId() { return randomBytes(12).toString('hex'); }
 
 async function getSessionUser(sid: string | undefined): Promise<any | null> {

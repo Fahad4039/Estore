@@ -1,15 +1,29 @@
-import { Router } from 'express';
+import { Router, type IRouter } from 'express';
 import { query, queryOne, execute } from '../db/postgres';
 import { createHash, randomBytes } from 'crypto';
+import bcrypt from 'bcrypt';
+import { setSessionCookie } from '../middlewares/auth';
 
-const router = Router();
+const router: IRouter = Router();
 
-function hashPassword(pw: string) {
-  return createHash('sha256').update(pw + 'estore-salt-2025').digest('hex');
-}
+const BCRYPT_SALT_ROUNDS = 12;
 function makeId(len = 16) { return randomBytes(len).toString('hex'); }
 function makeReferralCode(name: string) {
   return (name.toUpperCase().replace(/\s/g, '').slice(0, 4) + Math.random().toString(36).slice(2, 6).toUpperCase()).slice(0, 8);
+}
+function legacyHashPassword(password: string) {
+  return createHash('sha256').update(password + 'estore-salt-2025').digest('hex');
+}
+
+function sessionExpiry() {
+  return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+}
+
+async function verifyPassword(password: string, passwordHash: string) {
+  if (passwordHash.startsWith('$2')) {
+    return bcrypt.compare(password, passwordHash);
+  }
+  return legacyHashPassword(password) === passwordHash;
 }
 
 // POST /api/auth/register
@@ -23,7 +37,7 @@ router.post('/auth/register', async (req, res) => {
     const refCode = makeReferralCode(name);
     await execute(
       'INSERT INTO users (id,name,email,password_hash,referral_code,coins) VALUES ($1,$2,$3,$4,$5,$6)',
-      [id, name, email, hashPassword(password), refCode, 10]
+      [id, name, email, await bcrypt.hash(password, BCRYPT_SALT_ROUNDS), refCode, 10]
     );
     if (referralCode) {
       const referrer = await queryOne<any>('SELECT id FROM users WHERE referral_code=$1', [referralCode]);
@@ -38,9 +52,9 @@ router.post('/auth/register', async (req, res) => {
       }
     }
     const sessionId = makeId(32);
-    const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const expires = sessionExpiry();
     await execute('INSERT INTO sessions (id,user_id,expires_at) VALUES ($1,$2,$3)', [sessionId, id, expires]);
-    res.cookie('sid', sessionId, { httpOnly: true, sameSite: 'lax', expires });
+    setSessionCookie(res, sessionId, expires);
     const user = await queryOne<any>(
       'SELECT id,name,email,role,is_seller,coins,wallet_balance,membership,referral_code FROM users WHERE id=$1', [id]
     );
@@ -56,15 +70,24 @@ router.post('/auth/login', async (req, res) => {
   if (!email || !password) return res.status(400).json({ error: 'email and password required' });
   try {
     const user = await queryOne<any>(
-      'SELECT id,name,email,role,is_seller,coins,wallet_balance,membership,referral_code FROM users WHERE email=$1 AND password_hash=$2',
-      [email, hashPassword(password)]
+      'SELECT id,name,email,role,is_seller,coins,wallet_balance,membership,referral_code,password_hash FROM users WHERE email=$1',
+      [email]
     );
-    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!user || !(await verifyPassword(password, user.password_hash))) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    if (!user.password_hash.startsWith('$2')) {
+      await execute('UPDATE users SET password_hash=$1 WHERE id=$2', [
+        await bcrypt.hash(password, BCRYPT_SALT_ROUNDS),
+        user.id,
+      ]);
+    }
     const sessionId = makeId(32);
-    const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const expires = sessionExpiry();
     await execute('INSERT INTO sessions (id,user_id,expires_at) VALUES ($1,$2,$3)', [sessionId, user.id, expires]);
-    res.cookie('sid', sessionId, { httpOnly: true, sameSite: 'lax', expires });
-    res.json(user);
+    setSessionCookie(res, sessionId, expires);
+    const { password_hash: _passwordHash, ...safeUser } = user;
+    res.json(safeUser);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -90,9 +113,9 @@ router.get('/auth/me', async (req, res) => {
 
 // POST /api/auth/logout
 router.post('/auth/logout', async (req, res) => {
-  const sid = req.cookies?.sid;
+  const sid = req.signedCookies?.sid;
   if (sid) { try { await execute('DELETE FROM sessions WHERE id=$1', [sid]); } catch {} }
-  res.clearCookie('sid');
+  res.clearCookie('sid', { httpOnly: true, sameSite: 'lax', signed: true });
   res.json({ success: true });
 });
 

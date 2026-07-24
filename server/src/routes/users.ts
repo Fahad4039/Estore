@@ -1,12 +1,15 @@
-import { Router } from 'express';
+import { Router, type IRouter } from 'express';
 import { query, queryOne, execute } from '../db/postgres';
 import { createHash } from 'crypto';
+import bcrypt from 'bcrypt';
 
-const router = Router();
+const router: IRouter = Router();
 
 function hashPassword(pw: string) {
   return createHash('sha256').update(pw + 'estore-salt-2025').digest('hex');
 }
+
+const BCRYPT_SALT_ROUNDS = 12;
 
 async function getSessionUser(sid: string | undefined): Promise<any | null> {
   if (!sid) return null;
@@ -58,10 +61,16 @@ router.put('/users/password', async (req, res) => {
   if (!currentPassword || !newPassword) return res.status(400).json({ error: 'currentPassword and newPassword required' });
   try {
     const dbUser = await queryOne<any>('SELECT password_hash FROM users WHERE id=$1', [user.id]);
-    if (!dbUser || dbUser.password_hash !== hashPassword(currentPassword)) {
+    const currentPasswordMatches = dbUser?.password_hash?.startsWith('$2')
+      ? await bcrypt.compare(currentPassword, dbUser.password_hash)
+      : dbUser?.password_hash === hashPassword(currentPassword);
+    if (!currentPasswordMatches) {
       return res.status(400).json({ error: 'Current password is incorrect' });
     }
-    await execute('UPDATE users SET password_hash=$1 WHERE id=$2', [hashPassword(newPassword), user.id]);
+    await execute('UPDATE users SET password_hash=$1 WHERE id=$2', [
+      await bcrypt.hash(newPassword, BCRYPT_SALT_ROUNDS),
+      user.id,
+    ]);
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

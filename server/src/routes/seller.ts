@@ -1,8 +1,9 @@
-import { Router } from 'express';
+import { Router, type IRouter } from 'express';
 import { query, queryOne, execute } from '../db/postgres';
 import { randomBytes } from 'crypto';
+import { type AuthUser } from '../middlewares/auth';
 
-const router = Router();
+const router: IRouter = Router();
 function makeId() { return randomBytes(8).toString('hex'); }
 
 async function getSessionUser(sid: string | undefined): Promise<any | null> {
@@ -11,15 +12,6 @@ async function getSessionUser(sid: string | undefined): Promise<any | null> {
     `SELECT u.id,u.name,u.email,u.role,u.is_seller,u.coins,u.wallet_balance
      FROM sessions s JOIN users u ON s.user_id=u.id WHERE s.id=$1 AND s.expires_at > NOW()`, [sid]
   );
-}
-
-async function requireSeller(req: any, res: any): Promise<any> {
-  const user = await getSessionUser(req.cookies?.sid);
-  if (!user) { res.status(401).json({ error: 'Not authenticated' }); return null; }
-  if (!user.is_seller && user.role !== 'admin') {
-    res.status(403).json({ error: 'Seller access required' }); return null;
-  }
-  return user;
 }
 
 // POST /api/seller/register
@@ -36,8 +28,7 @@ router.post('/seller/register', async (req, res) => {
 
 // GET /api/seller/stats
 router.get('/seller/stats', async (req, res) => {
-  const user = await requireSeller(req, res);
-  if (!user) return;
+  const user = req.user as AuthUser;
   try {
     const [products, orders, pending, recentOrders] = await Promise.all([
       queryOne<any>('SELECT COUNT(*) as cnt FROM products WHERE seller_id=$1', [user.id]),
@@ -69,8 +60,7 @@ router.get('/seller/stats', async (req, res) => {
 
 // GET /api/seller/products
 router.get('/seller/products', async (req, res) => {
-  const user = await requireSeller(req, res);
-  if (!user) return;
+  const user = req.user as AuthUser;
   try {
     const products = await query<any>('SELECT * FROM products WHERE seller_id=$1 ORDER BY created_at DESC', [user.id]);
     res.json({ products });
@@ -81,8 +71,7 @@ router.get('/seller/products', async (req, res) => {
 
 // GET /api/seller/orders
 router.get('/seller/orders', async (req, res) => {
-  const user = await requireSeller(req, res);
-  if (!user) return;
+  const user = req.user as AuthUser;
   try {
     const orders = await query<any>(
       `SELECT DISTINCT o.id,o.status,o.total,o.created_at,
@@ -107,8 +96,7 @@ router.get('/seller/orders', async (req, res) => {
 
 // POST /api/seller/record-sale
 router.post('/seller/record-sale', async (req, res) => {
-  const user = await requireSeller(req, res);
-  if (!user) return;
+  const user = req.user as AuthUser;
   const { amount, description } = req.body ?? {};
   if (!amount || amount <= 0) return res.status(400).json({ error: 'amount required' });
   try {
