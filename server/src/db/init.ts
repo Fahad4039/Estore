@@ -187,6 +187,24 @@ export async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_notif_user          ON notifications(user_id);
   `);
 
+  // Auth extensions are kept as idempotent ALTER statements so existing
+  // PostgreSQL databases receive the new auth fields without being recreated.
+  await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS banned BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS firebase_uid TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_firebase_uid
+      ON users(firebase_uid) WHERE firebase_uid IS NOT NULL;
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      token_hash  TEXT PRIMARY KEY,
+      user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires_at  TIMESTAMPTZ NOT NULL,
+      used_at     TIMESTAMPTZ,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_password_reset_user
+      ON password_reset_tokens(user_id);
+  `);
+
   logger.info('PostgreSQL tables created/verified');
 
   // Seed admin user

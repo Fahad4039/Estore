@@ -48,7 +48,7 @@ export function setSessionCookie(res: Response, sessionId: string, expires: Date
 }
 
 function reject(res: Response, status: 401 | 403, error: string) {
-  return res.status(status).json({ error });
+  return res.status(status).json({ success: false, error });
 }
 
 /**

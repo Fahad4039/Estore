@@ -32,7 +32,6 @@ router.use("/reviews", (req, res, next) => {
   return requireAuth(req, res, next);
 });
 router.use(productsRouter);
-router.use("/auth/me", requireAuth);
 router.use(authRouter);
 
 router.use("/cart", requireAuth);
