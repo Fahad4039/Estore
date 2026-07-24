@@ -242,7 +242,7 @@ router.get("/products", async (req, res) => {
   let parameter = 1;
   const add = (condition: string, value?: unknown) => {
     if (value !== undefined) {
-      conditions.push(condition.replace("?", `$${parameter++}`));
+      conditions.push(condition.replace("?", `${parameter++}`));
       params.push(value);
     }
   };
