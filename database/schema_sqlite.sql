@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS products (
   is_trending     INTEGER NOT NULL DEFAULT 0,
   is_best_seller  INTEGER NOT NULL DEFAULT 0,
   is_flash_sale   INTEGER NOT NULL DEFAULT 0,
+  flash_sale_price REAL,
   is_new          INTEGER NOT NULL DEFAULT 0,
   seller_id       TEXT,
   seller_name     TEXT,

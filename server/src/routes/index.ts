@@ -19,6 +19,7 @@ router.use(healthRouter);
 // creating/helping reviews require an authenticated session.
 router.use("/products", (req, res, next) => {
   if (req.method === "GET") return next();
+  if (req.method === "POST" && req.path.endsWith("/view")) return next();
   return requireAuth(req, res, (error?: unknown) => {
     if (error) return next(error);
     if (req.user?.role !== "admin" && req.user?.is_seller !== true) {

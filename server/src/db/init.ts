@@ -55,6 +55,7 @@ export async function initDB() {
       is_trending     BOOLEAN     NOT NULL DEFAULT false,
       is_best_seller  BOOLEAN     NOT NULL DEFAULT false,
       is_flash_sale   BOOLEAN     NOT NULL DEFAULT false,
+      flash_sale_price NUMERIC(10,2),
       is_new          BOOLEAN     NOT NULL DEFAULT false,
       seller_id       TEXT,
       seller_name     TEXT,
@@ -79,6 +80,16 @@ export async function initDB() {
       product_id  TEXT        NOT NULL REFERENCES products(id) ON DELETE CASCADE,
       created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (user_id, product_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS seller_analytics (
+      id          SERIAL      PRIMARY KEY,
+      seller_id   TEXT        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      report_date DATE        NOT NULL,
+      sales_count INTEGER     NOT NULL DEFAULT 0,
+      revenue     NUMERIC(12,2) NOT NULL DEFAULT 0,
+      views       INTEGER     NOT NULL DEFAULT 0,
+      UNIQUE (seller_id, report_date)
     );
 
     CREATE TABLE IF NOT EXISTS orders (
@@ -192,6 +203,7 @@ export async function initDB() {
   await pool.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS banned BOOLEAN NOT NULL DEFAULT false;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS firebase_uid TEXT;
+    ALTER TABLE products ADD COLUMN IF NOT EXISTS flash_sale_price NUMERIC(10,2);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_firebase_uid
       ON users(firebase_uid) WHERE firebase_uid IS NOT NULL;
     CREATE TABLE IF NOT EXISTS password_reset_tokens (
