@@ -1,4 +1,7 @@
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Router, type IRouter, type RequestHandler } from "express";
 import { z } from "zod";
 import { execute, query, queryOne } from "../db/postgres";
@@ -9,6 +12,16 @@ import {
 } from "../middlewares/auth";
 
 const router: IRouter = Router();
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+let staticProducts: any[] = [];
+try {
+  staticProducts = JSON.parse(
+    readFileSync(join(__dirname, "../db/products-seed.json"), "utf8"),
+  );
+} catch {
+  // The database remains the source of truth when no bundled seed exists.
+}
 
 const sortValues = ["price_asc", "price_desc", "newest", "popular", "rating"] as const;
 const productStatusValues = ["active", "inactive", "pending"] as const;
@@ -164,6 +177,17 @@ function sendDatabaseError(res: any, error: unknown) {
   return res.status(500).json({ error: "Unable to process product request" });
 }
 
+function legacyProductList(products: any[], page = 1, limit = 12) {
+  return {
+    products,
+    data: products,
+    source: "static",
+    total: products.length,
+    page,
+    totalPages: products.length === 0 ? 0 : Math.ceil(products.length / limit),
+  };
+}
+
 function flagCondition(queryValue: string | undefined, column: string) {
   return queryValue ? `${column}=TRUE` : null;
 }
@@ -291,12 +315,15 @@ router.get("/products", async (req, res) => {
     const total = Number(totalRow?.total ?? 0);
     return res.json({
       products: rows.map(dbRow),
+      data: rows.map(dbRow),
+      source: "postgresql",
       total,
       page: filters.page,
       totalPages: total === 0 ? 0 : Math.ceil(total / filters.limit),
     });
   } catch (error) {
-    return sendDatabaseError(res, error);
+    console.error("Products list API error", error);
+    return res.json(legacyProductList(staticProducts, filters.page, filters.limit));
   }
 });
 
@@ -325,7 +352,11 @@ router.get("/products/:id", async (req, res) => {
       seller: sellerFromRow(row),
     });
   } catch (error) {
-    return sendDatabaseError(res, error);
+    console.error("Product detail API error", error);
+    const product = staticProducts.find((item: any) => item.id === req.params.id);
+    return product
+      ? res.json(product)
+      : sendDatabaseError(res, error);
   }
 });
 
